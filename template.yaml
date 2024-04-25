@@ -123,7 +123,11 @@ Resources:
   publicInstance:
     Type: 'AWS::EC2::Instance'
     Properties:
-      SubnetId: !Ref publicSubnet
+      NetworkInterfaces:
+        DeviceIndex: '0'
+        SubnetId: !Ref publicSubnet
+        GroupSet:
+          - !Ref instanceSecurityGroup
       KeyName: !Ref keyPair
       ImageId: !Ref amiId
       SecurityGroups: !Ref instanceSecurityGroup
