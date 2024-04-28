@@ -1,161 +1,143 @@
-AWSTemplateFormatVersion: 2010-09-09
-Description: 'This Template is incorrect, kindly correct it.'
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create a VPC with public and private subnets, an EC2 instance in the public subnet, and an RDS DB instance in the private subnet.'
+
 Parameters:
-  amiId:
+  VpcCIDR:
     Type: String
-    Default: ami-04e5276ebb8451442
-    Description: Choose an Ubuntu AMI
-  keyPair:
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Description: Choose your Ubuntu AMI
-  dbMasterUserName:
-    Type: String
-    Default: admin
-    Description: 'This will be the username, used to connect to your database'
-  dbMasterPassword:
-    Type: String
-    Default: Admin9876
-    Description: 'This will be the password, used to connect to your database'
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for the VPC.'
+
 Resources:
-  vpc:
+  VPC:
     Type: 'AWS::EC2::VPC'
     Properties:
-      CidrBlock: 192.168.0.0/24
-      Tags:
-        - Key: Name
-          Value: vpc
-        - Key: Env
-          Value: Intellipaat
+      CidrBlock: !Ref 'VpcCIDR'
       EnableDnsSupport: true
       EnableDnsHostnames: true
-  publicSubnet:
-    Type: 'AWS::EC2::Subnet'
-    Properties:
-      CidrBlock: 192.168.0.0/28
-      MapPublicIpOnLaunch: false
-      AvailabilityZone: us-east-1a
-      VpcId: !Ref vpc
       Tags:
         - Key: Name
-          Value: pubSub
-        - Key: Env
-          Value: Intellipaat
-  privateSubnet1:
+          Value: 'MyVPC'
+
+  PublicSubnet:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      MapPublicIpOnLaunch: false
-      AvailabilityZone: us-east-1a
-      CidrBlock: 192.168.0.16/28
-      VpcId: !Ref vpc
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: priSub1
-        - Key: Env
-          Value: Intellipaat
-  privateSubnet2:
+          Value: 'PublicSubnet'
+
+  PrivateSubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      MapPublicIpOnLaunch: false
-      AvailabilityZone: us-east-1a
-      CidrBlock: 192.168.0.32/28
-      VpcId: !Ref vpc
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: priSub2
-        - Key: Env
-          Value: Intellipaat
-  instanceSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+          Value: 'PrivateSubnet1'
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
     Properties:
-      VpcId: !Ref vpc
-      GroupName: insatnceSecurityGroup
-      GroupDescription: This will allow connection from anywhere
-      SecurityGroupIngress:
-        CidrIp: 0.0.0.0/0
-        FromPort: '22'
-        ToPort: '22'
-        IpProtocol: tcp
-      SecurityGroupEgress:
-        CidrIp: 0.0.0.0/0
-        IpProtocol: -1
-  rdsSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      VpcId: !Ref vpc
-      GroupName: rdsSecurityGroup
-      GroupDescription: This will allow connection from public subnet only
-      SecurityGroupIngress:
-        CidrIp: 192.168.0.0/28
-        FromPort: '3306'
-        ToPort: '3306'
-        IpProtocol: tcp
-      SecurityGroupEgress:
-        CidrIp: 0.0.0.0/0
-        IpProtocol: -1
-  igw:
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.0.3.0/24'
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: 'PrivateSubnet2'
+
+  InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
     Properties:
       Tags:
         - Key: Name
-          Value: igw
-        - Key: Env
-          Value: Intellipaat
-  igwToVpc:
+          Value: 'InternetGateway'
+
+  AttachGateway:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
-      InternetGatewayId: !Ref igw
-      VpcId: !Ref vpc
-  publicRouteTable:
+      VpcId: !Ref 'VPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+
+  PublicRouteTable:
     Type: 'AWS::EC2::RouteTable'
     Properties:
-      VpcId: !Ref vpc
-  publicRoute:
-    Type: 'AWS::EC2::Route'
-    Properties:
-      RouteTableId: !Ref publicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref igw
-  publicSubnetAssossciation:
-    Type: 'AWS::EC2::SubnetRouteTableAssociation'
-    Properties:
-      RouteTableId: !Ref publicRouteTable
-      SubnetId: !Ref publicSubnet
-  publicInstance:
-    Type: 'AWS::EC2::Instance'
-    Properties:
-      SubnetId: !Ref publicSubnet
-      KeyName: !Ref keyPair
-      ImageId: !Ref amiId
-      SecurityGroups: !Ref instanceSecurityGroup
-      InstanceType: t2.micro
+      VpcId: !Ref 'VPC'
       Tags:
         - Key: Name
-          Value: instance
-        - Key: Env
-          Value: Intellipaat
-  rdsSubnetGroup:
+          Value: 'PublicRouteTable'
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: 'AttachGateway'
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+
+  PublicSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref 'PublicSubnet'
+      RouteTableId: !Ref 'PublicRouteTable'
+
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable SSH access and HTTP from anywhere'
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: '0.0.0.0/0'
+
+  EC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      SecurityGroupIds:
+        - !Ref 'SecurityGroup'
+      SubnetId: !Ref 'PublicSubnet'
+      KeyName: 'YourKeyPairName'
+      ImageId: 'ami-xxxxxxxxxxxxxxxxx'  # Specify your desired AMI ID
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          service httpd start
+          chkconfig httpd on
+          echo '<html><body><h1>Hello from EC2!</h1></body></html>' > /var/www/html/index.html
+
+  DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
-      DBSubnetGroupName: rdsSubnetGroup
-      DBSubnetGroupDescription: It will contain subnet that rds should contain
+      DBSubnetGroupDescription: 'Subnet group for RDS DB instance'
       SubnetIds:
-        - !Ref privateSubnet1
-        - !Ref privateSubnet2
-  rds:
+        - !Ref 'PrivateSubnet1'
+        - !Ref 'PrivateSubnet2'
+
+  DBInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      Port: '3306'
-      DBInstanceIdentifier: intellipaat
-      MultiAZ: false
-      Engine: MYSQL
-      DBInstanceClass: db.t2.micro
-      StorageType: gp2
-      DBSubnetGroupName: !Ref rdsSubnetGroup
-      VPCSecurityGroups:
-        - !Ref rdsSecurityGroup
-      EngineVersion: 8.0.28
-      DeletionProtection: false
+      DBInstanceClass: 'db.t2.micro'
+      Engine: 'mysql'
+      EngineVersion: '5.7'
+      DBName: 'MyDB'
       AllocatedStorage: '20'
-      MaxAllocatedStorage: 1000
-      MasterUsername: !Ref dbMasterUserName
-      MasterUserPassword: !Ref dbMasterPassword
+      MasterUsername: 'admin'
+      MasterUserPassword: 'vikas107@'
+      DBSubnetGroupName: !Ref 'DBSubnetGroup'
+
+Outputs:
+  PublicIPAddress:
+    Value: !GetAtt 'EC2Instance.PublicIp'
+    Description: 'Public IP address of the EC2 instance.'
